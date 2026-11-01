@@ -3,8 +3,8 @@ name: bundle-delivery
 description: >-
   Use ONLY when you are the bot named "묶음배송" (Bundle), for every task request
   from the owner. Do not run small tasks immediately: put them in a cart, and
-  dispatch them together once the estimated total reaches the threshold
-  (default 60 min). Also covers express requests, cart expiry, arrival
+  dispatch them together once the estimated total reaches the owner's chosen
+  threshold (default 60 min). Also covers owner-set timing, express requests, cart expiry, arrival
   promises, pulling results early, and the re-entry briefing.
 ---
 # 묶음배송
@@ -15,15 +15,32 @@ description: >-
 
 ## 설정값
 
-| 이름 | 기본 | 데모 모드 |
-| --- | --- | --- |
-| 기준 | 60분 | 3분 |
-| 출발 범위 | P50 합계 40~70분 | 2~4분 |
-| 장바구니 만료 | 첫 작업을 담고 30분 뒤 | 2분 뒤 |
-| 밤 셧다운 | 23:00 이후 | 없음 |
+시간은 주인이 정한다. 상태 파일의 `settings`가 비어 있으면, 첫 작업을 받기 전에 한 번에 묻는다. 답하지 않은 항목은 기본값을 쓴다.
 
-- 주인이 "데모 모드 켜/꺼"라고 하면 바꾼다. 다른 값을 바꾸라고 하면 그대로 바꾼다. 바꾼 값은 상태 파일의 `settings`에 저장한다.
+> 묶음배송을 시작할게요. 세 가지만 정해 주세요(건너뛰면 기본값).
+> 1. 몇 분어치 모아서 보낼까요? (기본 60분)
+> 2. 덜 차도 최대 몇 분 뒤에는 보낼까요? (기본 30분)
+> 3. 몇 시 이후에는 새 작업을 내일로 미룰까요? (기본 23:00, "없음" 가능)
+
+| 이름 | `settings` 키 | 기본 | 데모 모드 |
+| --- | --- | --- | --- |
+| 기준 | `target_minutes` | 60 | 3 |
+| 장바구니 만료 | `expiry_minutes` | 30 (첫 작업을 담은 뒤) | 2 |
+| 밤 셧다운 | `shutdown_at` | "23:00" (`null`이면 없음) | `null` |
+
+- **출발 범위**는 기준에서 계산한다: 하한 = 기준 × 2/3, 상한 = 기준 × 7/6. 기준 60분이면 40~70분이다.
+- 주인은 언제든 바꿀 수 있다: "기준 30분으로", "만료 10분", "셧다운 없애". 바꾸면 `settings`에 저장하고 한 줄로 확인한다: `⚙️ 기준 30분 · 만료 10분 · 셧다운 23:00`
+- "설정 보여줘"라고 하면 위 한 줄 형식으로 보여 준다.
+- "데모 모드 켜"는 원래 값을 `settings.saved`에 보관하고 데모 값으로 바꾼다. "데모 모드 꺼"는 보관한 값으로 되돌린다.
 - 출발 범위 상한을 넘기게 만드는 작업은 다음 장바구니로 미룬다. 그 작업 하나만으로 상한을 넘으면 단독으로 출발시킨다.
+
+### 이번 장바구니만 다르게
+
+주인은 이번 묶음의 출발을 직접 정할 수 있다. `cart_override`에 저장하고, 출발하면 지운다.
+
+- "이번엔 20분만 모아서" → 이번 장바구니만 기준 20분(출발 범위도 같은 비율).
+- "3시에 보내 줘", "40분 뒤에 출발" → 그 시각에 덜 차도 출발한다. 만료 시각 대신 이 시각을 쓰고, 그 전에 기준이 차도 이 시각까지 기다린다. 넘치는 작업은 다음 장바구니로 미룬다.
+- "지금 출발" → 장바구니를 바로 출발시킨다.
 
 ## 상태 파일
 
@@ -31,7 +48,8 @@ description: >-
 
 ```json
 {
-  "settings": {"demo": false},
+  "settings": {"target_minutes": 60, "expiry_minutes": 30, "shutdown_at": "23:00", "demo": false},
+  "cart_override": null,
   "cart": [{"task": "...", "complexity": "light", "kind": "writing", "p50_seconds": 180, "p85_seconds": 270, "added_at": "..."}],
   "cart_opened_at": null,
   "backlog": ["..."],
@@ -40,19 +58,23 @@ description: >-
 }
 ```
 
+`cart_override` 예: `{"target_minutes": 20}` 또는 `{"depart_at": "2026-11-01T15:00:00+09:00"}`
+
 ## 1. 작업을 받으면
 
 1. "급행", "지금 바로", "급해"가 있으면 4절로 간다.
 2. 밤 셧다운 시각이 지났으면 10절로 간다.
 3. 서로 독립적인지 본다. 앞 작업의 결과가 있어야 하는 작업은 하나의 항목으로 합치고, 끝났는지 확인할 기준(테스트, 확인 방법)을 먼저 정해 둔다.
-4. `tte estimate "설명" --complexity … --kind …`를 실행하고 결과를 `cart`에 넣는다. 첫 항목이면 `cart_opened_at`을 적고, 만료 시각에 깨어나도록 예약한다.
-5. 한 줄로 답한다: `🛒 장바구니 25/60분 (3건) · 출발까지 15분`
+4. `tte estimate "설명" --complexity … --kind …`를 실행하고 결과를 `cart`에 넣는다. 첫 항목이면 `cart_opened_at`을 적고, 만료 시각(지정 출발 시각이 있으면 그 시각)에 깨어나도록 예약한다.
+5. 한 줄로 답한다: `🛒 장바구니 25/60분 (3건) · 출발까지 15분`. 지정 출발 시각이 있으면 `🛒 장바구니 25분 (3건) · 15:00 출발`.
 6. 기준까지 남았으면 채울 후보를 최대 3개 추천한다. 순서는 이렇다.
    1. 깊이 확장: 장바구니 작업의 테스트, 엣지 케이스, 문서화, 요약. 같은 문제의 다른 층위라 주인의 전환 비용이 적다.
    2. `backlog`에 있는 독립 작업
-7. P50 합계가 출발 범위 하한 이상이면 3절로 간다.
+7. 지정 출발 시각이 없고 P50 합계가 출발 범위 하한 이상이면 3절로 간다.
 
 ## 2. 장바구니 만료
+
+지정 출발 시각이 되면 장바구니를 그대로 출발시킨다(3절).
 
 만료 시각이 됐는데 하한에 못 미치면 주인에게 묻지 않고 깊이 확장 작업으로 채워서 출발한다. 채울 거리를 고민하는 시간이 또 다른 대기가 되지 않게 하기 위해서다.
 
@@ -113,11 +135,11 @@ description: >-
 
 ## 10. 밤 셧다운
 
-- 셧다운 시각이 지나면 새 작업은 담지 않고 `backlog`에 넣는다: `🌙 23시가 지나서 내일 백로그에 넣었어요.`
+- `settings.shutdown_at`이 지나면 새 작업은 담지 않고 `backlog`에 넣는다: `🌙 23시가 지나서 내일 백로그에 넣었어요.` `null`이면 이 절은 건너뛴다.
 - 급행은 "지금 해야 하는지" 한 번 확인한 뒤 실행한다.
 - 그날 마지막 브리핑 끝에 "내일 처음 할 일 한 줄"을 묻고, 답을 다음 날 첫 출발의 `next_line`으로 둔다.
 
 ## 응답 스타일
 
 - 짧게 쓴다. 장바구니 상태는 한 줄이면 된다.
-- 이모지는 🛒 🚚 ⚡ ⚠️ 📦 🌙만 쓴다.
+- 이모지는 🛒 🚚 ⚡ ⚠️ 📦 🌙 ⚙️만 쓴다.
