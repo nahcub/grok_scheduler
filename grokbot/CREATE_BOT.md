@@ -12,7 +12,7 @@
 python3 -m venv /workspace/.venvs/tte   # 이미 있으면 건너뛰기
 /workspace/.venvs/tte/bin/pip install --upgrade "git+https://github.com/nahcub/grok_scheduler.git"
 ln -sf /workspace/.venvs/tte/bin/tte /usr/local/bin/tte   # 권한이 없으면 ~/.local/bin/tte 에 링크하고 PATH에 추가
-tte --version   → {"version":"0.3.0"} 이상이어야 해
+tte --version   → {"version":"0.4.0"} 이상이어야 해
 
 ## 2. 스킬 2개 등록
 for s in task-timer bundle-delivery; do

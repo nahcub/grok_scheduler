@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 현재 상태
 
-`tte` CLI 0.3.0 구현 완료(계획 1~7단계 + 기록 없이 예상만 보는 `estimate`). 0.3.0부터 예측은 **그록봇이 `--guess`(초, 필수)로 넘긴 추정에서 출발**하고, 기록이 쌓이면 "실제 ÷ 추정" 비율로 보정한다. 복잡도 3단계 규칙표는 너무 거칠어서(간단한 보고서도 10분으로 나옴) 뺐고, `--complexity`는 호환용으로만 받는다. 공개 저장소: https://github.com/nahcub/grok_scheduler. 그록봇 설치·검증(8단계)과 보정(9단계)은 아직이다. "계획된 구현 경로" 이하는 전체 기획의 맥락이다.
+`tte` CLI 0.4.0 구현 완료(계획 1~7단계 + 기록 없이 예상만 보는 `estimate`). 0.3.0부터 예측은 **그록봇이 `--guess`(초, 필수)로 넘긴 추정에서 출발**하고, 기록이 쌓이면 "실제 ÷ 추정" 비율로 보정한다. 복잡도 3단계 규칙표는 너무 거칠어서(간단한 보고서도 10분으로 나옴) 뺐고, `--complexity`는 호환용으로만 받는다. 0.4.0은 2026-11-01 그록봇 실측 33건 분석에 따라 kind·추정 크기 구간 비율을 표본 수만큼 섞는 축소 추정, P85 하한, `--scope multi`, `concurrency`/`owner`(`TTE_AGENT`) 기록, 대기를 뺀 시간 기준의 방치 판정과 `tte gc`, `PRAGMA user_version` 마이그레이션, `db_error` JSON 출력을 더했다. 기존 CLI 인자·출력 필드는 유지하고 필드만 추가한다. 공개 저장소: https://github.com/nahcub/grok_scheduler. 그록봇 설치·검증(8단계)과 보정(9단계)은 아직이다. "계획된 구현 경로" 이하는 전체 기획의 맥락이다.
 
 - 구조: `src/tte/cli.py`(명령, JSON 출력), `store.py`(SQLite), `estimate.py`(예측 순수 함수).
 - 그록봇용: `grokbot/skills/<slug>/SKILL.md`(그록봇이 `main` 브랜치의 raw URL로 내려받는다), `grokbot/INSTALL.md`(tte만 설치), `grokbot/CREATE_BOT.md`(묶음배송 봇 생성 프롬프트). 스킬 경로나 내용을 바꾸면 이 문서들의 URL·버전도 같이 맞춘다.
 - 외부 의존성 없음(표준 라이브러리만). 새 의존성을 추가하지 않는다.
 - 개발 설치: `python -m venv .venv` 후 `.venv/Scripts/python -m pip install -e .` (Linux는 `.venv/bin/`)
-- 테스트: `.venv/Scripts/python -m unittest discover -s tests`
+- 테스트: 저장소 루트에서 `python -m unittest` (설치 없이 돈다. `tests/__init__.py`가 `src`를 경로에 넣는다). 동시 실행 테스트가 프로세스 20개를 띄운다.
+- DB 스키마를 바꾸면 `store.SCHEMA_VERSION`을 올리고 `migrate()`에 단계를 추가한다. 예전 형식 DB를 여는 테스트(`tests/test_cli.py`의 `SCHEMA_0_3_0`)도 유지한다.
 - 기록 위치는 `TTE_HOME` → `/workspace/.tte` → `~/.tte` 순으로 정한다. 손으로 시험할 때는 `TTE_HOME`을 임시 폴더로 둔다.
 
 ## 이 디렉토리의 범위 (2026-11-01 결정)

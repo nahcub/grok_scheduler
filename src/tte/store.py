@@ -6,14 +6,17 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-# 시작한 지 이보다 오래 열려 있던 작업은 기록을 빠뜨린 것으로 보고 학습에서 뺀다.
+# 대기를 뺀 작업 시간이 이보다 길면 기록을 빠뜨린 것으로 보고 학습에서 뺀다.
 STALE_SECONDS = 6 * 3600
+
+# PRAGMA user_version. 0 = 0.3.0 이하(버전 관리 전), 1 = 0.4.0.
+SCHEMA_VERSION = 1
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     task TEXT NOT NULL,
-    complexity TEXT NOT NULL,
+    complexity TEXT NOT NULL DEFAULT 'medium',
     kind TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'open',
     started_at REAL NOT NULL,
@@ -26,9 +29,23 @@ CREATE TABLE IF NOT EXISTS tasks (
     p50_seconds INTEGER NOT NULL,
     p85_seconds INTEGER NOT NULL,
     method TEXT NOT NULL,
-    samples INTEGER NOT NULL
+    samples INTEGER NOT NULL,
+    concurrency INTEGER,
+    owner TEXT,
+    scope TEXT
 )
 """
+
+# 예전 DB에 없을 수 있는 컬럼. 0.2.0 이하에는 guess_seconds도 없다.
+ADDED_COLUMNS = {
+    "guess_seconds": "REAL",
+    "concurrency": "INTEGER",
+    "owner": "TEXT",
+    "scope": "TEXT",
+}
+
+# open_tasks에서 owner로 거르지 않을 때 쓰는 표시.
+ANY_OWNER = object()
 
 
 class TteError(Exception):
@@ -59,13 +76,23 @@ def connect(home=None):
     home.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(home / "tte.db", timeout=10, isolation_level=None)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute(SCHEMA)
-    # 0.2.0 이하로 만든 DB에는 guess_seconds가 없다.
-    columns = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)")}
-    if "guess_seconds" not in columns:
-        conn.execute("ALTER TABLE tasks ADD COLUMN guess_seconds REAL")
+    if conn.execute("PRAGMA user_version").fetchone()[0] < SCHEMA_VERSION:
+        migrate(conn)
     return conn
+
+
+def migrate(conn):
+    """처음 접속하는 프로세스 여럿이 겹쳐도 한 번만 바뀌도록 잠금 안에서 다시 확인한다."""
+    conn.execute("PRAGMA journal_mode=WAL")
+    with write(conn):
+        if conn.execute("PRAGMA user_version").fetchone()[0] >= SCHEMA_VERSION:
+            return
+        conn.execute(SCHEMA)
+        columns = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)")}
+        for name, sql_type in ADDED_COLUMNS.items():
+            if name not in columns:
+                conn.execute(f"ALTER TABLE tasks ADD COLUMN {name} {sql_type}")
+        conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
 
 
 @contextmanager
@@ -87,15 +114,17 @@ def new_id(conn):
             return task_id
 
 
-def insert_task(conn, *, task_id, task, complexity, kind, guess, now, estimate):
+def insert_task(conn, *, task_id, task, complexity, kind, guess, now, estimate,
+                concurrency, owner, scope):
     conn.execute(
         "INSERT INTO tasks (id, task, complexity, kind, guess_seconds, started_at,"
-        " p50_seconds, p85_seconds, method, samples)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " p50_seconds, p85_seconds, method, samples, concurrency, owner, scope)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             task_id, task, complexity, kind, guess, now,
             estimate["p50_seconds"], estimate["p85_seconds"],
             estimate["basis"]["method"], estimate["basis"]["samples"],
+            concurrency, owner, scope,
         ),
     )
 
@@ -104,10 +133,22 @@ def get_task(conn, task_id):
     return conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
 
 
-def open_tasks(conn):
-    return conn.execute(
-        "SELECT * FROM tasks WHERE status = 'open' ORDER BY started_at"
-    ).fetchall()
+def open_tasks(conn, owner=ANY_OWNER):
+    sql = "SELECT * FROM tasks WHERE status = 'open'"
+    params = []
+    if owner is not ANY_OWNER:
+        # IS는 NULL끼리도 같다고 본다(TTE_AGENT를 안 쓰는 기본 환경).
+        sql += " AND owner IS ?"
+        params.append(owner)
+    return conn.execute(sql + " ORDER BY started_at", params).fetchall()
+
+
+def active_seconds(row, now):
+    """대기를 뺀 작업 시간. 지금 대기 중이면 그 대기도 뺀다."""
+    waited = row["waited_seconds"]
+    if row["wait_started_at"] is not None:
+        waited += max(0.0, now - row["wait_started_at"])
+    return max(0.0, now - row["started_at"] - waited)
 
 
 def start_wait(conn, task_id, reason, now):
@@ -142,8 +183,8 @@ def finish(conn, task_id, status, now):
 
 
 def done_tasks(conn, kind=None):
-    """학습에 쓸 기록: 정상 종료했고 오래 방치되지 않은 작업."""
-    sql = "SELECT * FROM tasks WHERE status = 'done' AND ended_at - started_at <= ?"
+    """학습에 쓸 기록: 정상 종료했고, 대기를 뺀 작업 시간이 방치 기준 이하인 작업."""
+    sql = "SELECT * FROM tasks WHERE status = 'done' AND actual_seconds <= ?"
     params = [STALE_SECONDS]
     if kind:
         sql += " AND kind = ?"
@@ -151,7 +192,25 @@ def done_tasks(conn, kind=None):
     return conn.execute(sql, params).fetchall()
 
 
-def ratios(conn, kind=None):
-    """실제 ÷ 그록봇 추정. 추정 없이 기록된 예전 작업은 뺀다."""
-    return [r["actual_seconds"] / r["guess_seconds"] for r in done_tasks(conn, kind)
-            if r["guess_seconds"]]
+def ratios(conn, kind=None, guess_range=None):
+    """실제 ÷ 그록봇 추정. 추정 없이 기록된 예전 작업은 뺀다.
+
+    guess_range=(lo, hi)이면 추정이 lo 이상 hi 미만인 작업만 본다.
+    """
+    out = []
+    for r in done_tasks(conn, kind):
+        guess = r["guess_seconds"]
+        if not guess:
+            continue
+        if guess_range and not guess_range[0] <= guess < guess_range[1]:
+            continue
+        out.append(r["actual_seconds"] / guess)
+    return out
+
+
+def cancel_stale(conn, now, threshold):
+    """대기를 뺀 작업 시간이 threshold를 넘은 열린 작업을 cancelled로 닫는다."""
+    stale = [r for r in open_tasks(conn) if active_seconds(r, now) > threshold]
+    for r in stale:
+        finish(conn, r["id"], "cancelled", now)
+    return stale
