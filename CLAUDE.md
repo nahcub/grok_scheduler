@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 현재 상태
 
-`tte` CLI 0.2.0 구현 완료(계획 1~7단계 + 기록 없이 예상만 보는 `estimate`). 공개 저장소: https://github.com/nahcub/grok_scheduler. 그록봇 설치·검증(8단계)과 보정(9단계)은 아직이다. "계획된 구현 경로" 이하는 전체 기획의 맥락이다.
+`tte` CLI 0.3.0 구현 완료(계획 1~7단계 + 기록 없이 예상만 보는 `estimate`). 0.3.0부터 예측은 **그록봇이 `--guess`(초, 필수)로 넘긴 추정에서 출발**하고, 기록이 쌓이면 "실제 ÷ 추정" 비율로 보정한다. 복잡도 3단계 규칙표는 너무 거칠어서(간단한 보고서도 10분으로 나옴) 뺐고, `--complexity`는 호환용으로만 받는다. 공개 저장소: https://github.com/nahcub/grok_scheduler. 그록봇 설치·검증(8단계)과 보정(9단계)은 아직이다. "계획된 구현 경로" 이하는 전체 기획의 맥락이다.
 
 - 구조: `src/tte/cli.py`(명령, JSON 출력), `store.py`(SQLite), `estimate.py`(예측 순수 함수).
 - 그록봇용: `grokbot/skills/<slug>/SKILL.md`(그록봇이 `main` 브랜치의 raw URL로 내려받는다), `grokbot/INSTALL.md`(tte만 설치), `grokbot/CREATE_BOT.md`(묶음배송 봇 생성 프롬프트). 스킬 경로나 내용을 바꾸면 이 문서들의 URL·버전도 같이 맞춘다.

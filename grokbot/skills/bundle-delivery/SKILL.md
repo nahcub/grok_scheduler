@@ -50,7 +50,7 @@ description: >-
 {
   "settings": {"target_minutes": 60, "shutdown_at": "23:00", "demo": false},
   "cart_override": null,
-  "cart": [{"task": "...", "complexity": "light", "kind": "writing", "p50_seconds": 180, "p85_seconds": 270, "added_at": "..."}],
+  "cart": [{"task": "...", "kind": "writing", "guess_seconds": 90, "p50_seconds": 90, "p85_seconds": 135, "added_at": "..."}],
   "backlog": ["..."],
   "deliveries": [{"departed_at": "...", "promise_at": "...", "next_line": "...", "briefed": false,
                   "tasks": [{"task": "...", "tte_id": "a3f9c1", "status": "done", "result": "..."}]}]
@@ -64,7 +64,7 @@ description: >-
 1. "급행", "지금 바로", "급해"가 있으면 4절로 간다.
 2. 밤 셧다운 시각이 지났으면 10절로 간다.
 3. 서로 독립적인지 본다. 앞 작업의 결과가 있어야 하는 작업은 하나의 항목으로 합치고, 끝났는지 확인할 기준(테스트, 확인 방법)을 먼저 정해 둔다.
-4. `tte estimate "설명" --complexity … --kind …`를 실행하고 결과를 `cart`에 넣는다.
+4. 보통 몇 초 걸릴지 직접 추정해서 `tte estimate "설명" --guess <초> --kind …`를 실행하고 결과를 `cart`에 넣는다. 합계와 약속 시각은 출력의 보정된 `p50_seconds`, `p85_seconds`로 계산한다.
 5. 한 줄로 답한다: `🛒 장바구니 25/60분 (3건) · 출발까지 15분`. 지정 출발 시각이 있으면 `🛒 장바구니 25분 (3건) · 15:00 출발`.
 6. 기준까지 남았으면 채울 후보를 최대 3개 추천한다. 순서는 이렇다.
    1. 깊이 확장: 장바구니 작업의 테스트, 엣지 케이스, 문서화, 요약. 같은 문제의 다른 층위라 주인의 전환 비용이 적다.

@@ -1,6 +1,6 @@
 import unittest
 
-from tte.estimate import P85_FACTOR, RULE_P50, confidence, estimate, percentile
+from tte.estimate import P85_FACTOR, confidence, estimate, percentile
 
 
 class PercentileTest(unittest.TestCase):
@@ -13,27 +13,38 @@ class PercentileTest(unittest.TestCase):
 
 
 class EstimateTest(unittest.TestCase):
-    def test_rule_when_no_history(self):
-        est = estimate("heavy", [], [])
-        self.assertEqual(est["p50_seconds"], RULE_P50["heavy"])
-        self.assertEqual(est["p85_seconds"], round(RULE_P50["heavy"] * P85_FACTOR))
-        self.assertEqual(est["basis"], {"method": "rule", "samples": 0})
+    def test_guess_when_no_history(self):
+        est = estimate(90, [], [])
+        self.assertEqual(est["p50_seconds"], 90)
+        self.assertEqual(est["p85_seconds"], round(90 * P85_FACTOR))
+        self.assertEqual(est["basis"], {"method": "guess", "samples": 0})
         self.assertEqual(est["confidence"], "low")
 
-    def test_kind_history_first(self):
-        est = estimate("medium", [100, 200, 300, 400, 500], [1000] * 10)
+    def test_calibrates_with_kind_ratios(self):
+        # 그록봇이 늘 2배 길게 말했다면 추정의 절반을 낸다.
+        est = estimate(600, [0.5] * 5, [1.0] * 10)
         self.assertEqual(est["p50_seconds"], 300)
-        self.assertEqual(est["basis"]["scope"], "kind")
-        self.assertEqual(est["basis"]["samples"], 5)
+        self.assertEqual(est["basis"], {"method": "calibrated", "scope": "kind",
+                                        "samples": 5, "ratio": 0.5})
+        self.assertEqual(est["confidence"], "medium")
 
-    def test_falls_back_to_complexity(self):
-        est = estimate("medium", [100, 200], [100, 200, 300, 400, 500, 600])
-        self.assertEqual(est["basis"]["scope"], "complexity")
-        self.assertEqual(est["basis"]["samples"], 6)
+    def test_p85_from_ratio_spread(self):
+        est = estimate(100, [0.5, 1.0, 1.5, 2.0, 2.5], [])
+        self.assertEqual(est["p50_seconds"], 150)
+        self.assertEqual(est["p85_seconds"], 220)
 
-    def test_rule_when_both_too_few(self):
-        est = estimate("light", [1, 2], [1, 2, 3, 4])
-        self.assertEqual(est["basis"]["method"], "rule")
+    def test_falls_back_to_all_ratios(self):
+        est = estimate(100, [2.0, 2.0], [1.5] * 6)
+        self.assertEqual(est["p50_seconds"], 150)
+        self.assertEqual(est["basis"]["scope"], "all")
+
+    def test_guess_when_both_too_few(self):
+        est = estimate(100, [2.0], [2.0] * 4)
+        self.assertEqual(est["basis"]["method"], "guess")
+
+    def test_never_zero(self):
+        est = estimate(10, [0.0] * 5, [])
+        self.assertEqual(est["p50_seconds"], 1)
 
     def test_confidence_levels(self):
         self.assertEqual(confidence(4), "low")

@@ -19,6 +19,16 @@ class Parser(argparse.ArgumentParser):
         raise TteError("bad_arguments", message, "tte --help 로 사용법을 확인하세요")
 
 
+def seconds(text):
+    try:
+        value = int(text)
+    except ValueError:
+        value = 0
+    if value <= 0:
+        raise argparse.ArgumentTypeError(f"--guess는 1 이상의 초 단위 정수여야 함: {text}")
+    return value
+
+
 def build_parser():
     parser = Parser(prog="tte", description="그록봇용 작업 시간 예측 CLI")
     parser.add_argument("--version", action="store_true", help="버전 출력")
@@ -28,8 +38,12 @@ def build_parser():
                             ("estimate", "기록 없이 예상 시간만")):
         p = sub.add_parser(name, help=help_text)
         p.add_argument("task", help="작업 설명")
-        p.add_argument("--complexity", choices=COMPLEXITIES, default="medium")
+        p.add_argument("--guess", type=seconds, required=True,
+                       help="그록봇이 추정한 보통 걸릴 시간(초)")
         p.add_argument("--kind", choices=KINDS, default="other")
+        # 0.2.0 이하와의 호환용 태그. 예측에는 쓰지 않는다.
+        p.add_argument("--complexity", choices=COMPLEXITIES, default="medium",
+                       help=argparse.SUPPRESS)
 
     p = sub.add_parser("wait", help="대기 시작(승인, 사람 응답 등)")
     p.add_argument("id", nargs="?")
@@ -74,17 +88,13 @@ def predict(conn, args):
     if not task:
         raise TteError("empty_task", "작업 설명이 비어 있음",
                        f'tte {args.command} "작업 설명" 형식으로 다시 실행하세요')
-    est = estimate(
-        args.complexity,
-        store.durations(conn, args.complexity, args.kind),
-        store.durations(conn, args.complexity),
-    )
+    est = estimate(args.guess, store.ratios(conn, args.kind), store.ratios(conn))
     return task, est
 
 
 def cmd_estimate(conn, args, now):
     task, est = predict(conn, args)
-    return {"task": task, "complexity": args.complexity, "kind": args.kind, **est}
+    return {"task": task, "kind": args.kind, "guess_seconds": args.guess, **est}
 
 
 def cmd_start(conn, args, now):
@@ -93,9 +103,9 @@ def cmd_start(conn, args, now):
         others = [r["id"] for r in store.open_tasks(conn)]
         task_id = store.new_id(conn)
         store.insert_task(conn, task_id=task_id, task=task, complexity=args.complexity,
-                          kind=args.kind, now=now, estimate=est)
-    out = {"id": task_id, "task": task, "complexity": args.complexity,
-           "kind": args.kind, **est}
+                          kind=args.kind, guess=args.guess, now=now, estimate=est)
+    out = {"id": task_id, "task": task, "kind": args.kind,
+           "guess_seconds": args.guess, **est}
     if others:
         out["open_tasks"] = others
     return out
@@ -149,19 +159,22 @@ def cmd_list(conn, args, now):
 
 def cmd_stats(conn, args, now):
     rows = store.done_tasks(conn)
-    groups = {}
-    for r in rows:
-        groups.setdefault((r["kind"], r["complexity"]), []).append(r["actual_seconds"])
     hits = sum(1 for r in rows if r["actual_seconds"] <= r["p85_seconds"])
+    groups = []
+    for kind in sorted({r["kind"] for r in rows}):
+        actuals = [r["actual_seconds"] for r in rows if r["kind"] == kind]
+        ratios = store.ratios(conn, kind)
+        groups.append({
+            "kind": kind,
+            "samples": len(actuals),
+            "actual_p50_seconds": round(percentile(actuals, 0.5)),
+            # 1보다 크면 그록봇이 짧게, 작으면 길게 추정하는 버릇이 있다.
+            "guess_ratio_p50": round(percentile(ratios, 0.5), 2) if ratios else None,
+        })
     return {
         "done": len(rows),
         "p85_hit_rate": round(hits / len(rows), 2) if rows else None,
-        "groups": [
-            {"kind": kind, "complexity": complexity, "samples": len(values),
-             "p50_seconds": round(percentile(values, 0.5)),
-             "p85_seconds": round(percentile(values, 0.85))}
-            for (kind, complexity), values in sorted(groups.items())
-        ],
+        "groups": groups,
     }
 
 

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     wait_started_at REAL,
     wait_reason TEXT,
     actual_seconds REAL,
+    guess_seconds REAL,
     p50_seconds INTEGER NOT NULL,
     p85_seconds INTEGER NOT NULL,
     method TEXT NOT NULL,
@@ -60,6 +61,10 @@ def connect(home=None):
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute(SCHEMA)
+    # 0.2.0 이하로 만든 DB에는 guess_seconds가 없다.
+    columns = {r["name"] for r in conn.execute("PRAGMA table_info(tasks)")}
+    if "guess_seconds" not in columns:
+        conn.execute("ALTER TABLE tasks ADD COLUMN guess_seconds REAL")
     return conn
 
 
@@ -82,13 +87,13 @@ def new_id(conn):
             return task_id
 
 
-def insert_task(conn, *, task_id, task, complexity, kind, now, estimate):
+def insert_task(conn, *, task_id, task, complexity, kind, guess, now, estimate):
     conn.execute(
-        "INSERT INTO tasks (id, task, complexity, kind, started_at,"
+        "INSERT INTO tasks (id, task, complexity, kind, guess_seconds, started_at,"
         " p50_seconds, p85_seconds, method, samples)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
-            task_id, task, complexity, kind, now,
+            task_id, task, complexity, kind, guess, now,
             estimate["p50_seconds"], estimate["p85_seconds"],
             estimate["basis"]["method"], estimate["basis"]["samples"],
         ),
@@ -136,18 +141,17 @@ def finish(conn, task_id, status, now):
     return get_task(conn, task_id)
 
 
-def done_tasks(conn, complexity=None, kind=None):
+def done_tasks(conn, kind=None):
     """학습에 쓸 기록: 정상 종료했고 오래 방치되지 않은 작업."""
     sql = "SELECT * FROM tasks WHERE status = 'done' AND ended_at - started_at <= ?"
     params = [STALE_SECONDS]
-    if complexity:
-        sql += " AND complexity = ?"
-        params.append(complexity)
     if kind:
         sql += " AND kind = ?"
         params.append(kind)
     return conn.execute(sql, params).fetchall()
 
 
-def durations(conn, complexity, kind=None):
-    return [r["actual_seconds"] for r in done_tasks(conn, complexity, kind)]
+def ratios(conn, kind=None):
+    """실제 ÷ 그록봇 추정. 추정 없이 기록된 예전 작업은 뺀다."""
+    return [r["actual_seconds"] / r["guess_seconds"] for r in done_tasks(conn, kind)
+            if r["guess_seconds"]]

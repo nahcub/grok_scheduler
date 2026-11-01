@@ -13,8 +13,8 @@ tte와 `task-timer` 스킬만 설치한다. 묶음배송 봇까지 만들려면 
    ln -sf /workspace/.venvs/tte/bin/tte /usr/local/bin/tte   # 권한이 없으면 ~/.local/bin/tte 에 링크하고 PATH에 추가
 
 2. 확인
-   tte --version   → {"version":"0.2.0"} 이 나와야 해
-   tte start "설치 확인" --complexity light --kind other
+   tte --version   → {"version":"0.3.0"} 이 나와야 해
+   tte start "설치 확인" --guess 30 --kind other
    tte stop
    두 명령의 출력을 보여 줘.
 

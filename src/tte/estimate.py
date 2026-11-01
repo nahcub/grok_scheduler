@@ -1,9 +1,11 @@
-"""예측 계산. 저장소에 의존하지 않는 순수 함수만 둔다."""
+"""예측 계산. 저장소에 의존하지 않는 순수 함수만 둔다.
+
+그록봇이 직접 추정한 시간(guess)에서 출발한다. 기록이 쌓이면 "실제 ÷ 추정" 비율로
+그록봇이 늘 길게 또는 짧게 말하는 버릇을 보정한다.
+"""
 
 import math
 
-# 기록이 부족할 때 쓰는 복잡도별 P50(초). 임시값이며 실제 사용 기록으로 고친다.
-RULE_P50 = {"light": 180, "medium": 600, "heavy": 1500}
 P85_FACTOR = 1.5
 MIN_SAMPLES = 5
 
@@ -24,20 +26,21 @@ def confidence(samples):
     return "high"
 
 
-def estimate(complexity, same_kind, same_complexity):
-    """같은 (kind, complexity) 기록 → 같은 complexity 기록 → 규칙 순으로 대체한다."""
-    for scope, values in (("kind", same_kind), ("complexity", same_complexity)):
-        if len(values) >= MIN_SAMPLES:
+def estimate(guess, same_kind_ratios, all_ratios):
+    """같은 kind의 비율 → 전체 비율 → 그록봇 추정 그대로 순으로 대체한다."""
+    for scope, ratios in (("kind", same_kind_ratios), ("all", all_ratios)):
+        if len(ratios) >= MIN_SAMPLES:
+            r50, r85 = percentile(ratios, 0.5), percentile(ratios, 0.85)
             return {
-                "p50_seconds": round(percentile(values, 0.5)),
-                "p85_seconds": round(percentile(values, 0.85)),
-                "basis": {"method": "history", "scope": scope, "samples": len(values)},
-                "confidence": confidence(len(values)),
+                "p50_seconds": max(1, round(guess * r50)),
+                "p85_seconds": max(1, round(guess * r85)),
+                "basis": {"method": "calibrated", "scope": scope,
+                          "samples": len(ratios), "ratio": round(r50, 2)},
+                "confidence": confidence(len(ratios)),
             }
-    p50 = RULE_P50[complexity]
     return {
-        "p50_seconds": p50,
-        "p85_seconds": round(p50 * P85_FACTOR),
-        "basis": {"method": "rule", "samples": 0},
+        "p50_seconds": guess,
+        "p85_seconds": round(guess * P85_FACTOR),
+        "basis": {"method": "guess", "samples": 0},
         "confidence": "low",
     }
