@@ -30,6 +30,14 @@ tte start "작업 설명" --complexity <light|medium|heavy> --kind <research|wri
 - 사용자에게 `p50_seconds`와 `p85_seconds`를 분 단위로 말한다. 예: "보통 20분, 늦어도 30분 안에 드릴게요."
 - `p85_seconds`가 약속 시간이다. `confidence`가 `low`면 "아직 기록이 적어서 대략적인 예상"이라고 덧붙인다.
 
+### 시작하지 않고 예상만 볼 때
+
+장바구니에 담을 때처럼 아직 실행하지 않는 작업은 `tte estimate`를 쓴다. 인자와 출력은 `start`와 같고 `id`가 없으며 아무것도 기록하지 않는다.
+
+```bash
+tte estimate "작업 설명" --complexity medium --kind writing
+```
+
 ## 2. 사람을 기다릴 때
 
 승인 요청이나 질문으로 사람 답을 기다리기 직전과 직후에 기록한다. 기다린 시간은 작업 시간에서 빠진다.

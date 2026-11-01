@@ -1,5 +1,7 @@
 # 그록봇에 tte 설치하기
 
+tte와 `task-timer` 스킬만 설치한다. 묶음배송 봇까지 만들려면 [CREATE_BOT.md](CREATE_BOT.md)를 쓴다(설치 단계가 들어 있다).
+
 아래 블록을 그록봇에게 그대로 붙여넣는다. 저장소: https://github.com/nahcub/grok_scheduler
 
 ```text
@@ -11,13 +13,14 @@
    ln -sf /workspace/.venvs/tte/bin/tte /usr/local/bin/tte   # 권한이 없으면 ~/.local/bin/tte 에 링크하고 PATH에 추가
 
 2. 확인
-   tte --version   → {"version":"0.1.0"} 이 나와야 해
+   tte --version   → {"version":"0.2.0"} 이 나와야 해
    tte start "설치 확인" --complexity light --kind other
    tte stop
    두 명령의 출력을 보여 줘.
 
 3. 스킬 등록
-   저장소의 grokbot/SKILL.md 내용을 /home/box/agent-data/workflows/task-timer/SKILL.md 로 저장해 줘.
+   mkdir -p /home/box/agent-data/workflows/task-timer
+   curl -fsSL https://raw.githubusercontent.com/nahcub/grok_scheduler/main/grokbot/skills/task-timer/SKILL.md -o /home/box/agent-data/workflows/task-timer/SKILL.md
 
 4. 봇 프로필 description에 이 한 줄을 추가해 줘:
    "모든 작업은 시작 전에 tte start, 끝난 뒤 tte stop (task-timer 스킬 참고)"

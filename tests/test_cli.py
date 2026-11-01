@@ -129,8 +129,24 @@ class CliTest(unittest.TestCase):
         self.assertEqual(stats["groups"][0]["kind"], "research")
         self.assertEqual(stats["groups"][0]["samples"], 2)
 
+    def test_estimate_does_not_record(self):
+        code, out = self.tte("estimate", "조사", "--complexity", "light", "--kind", "research")
+        self.assertEqual(code, 0)
+        self.assertNotIn("id", out)
+        self.assertEqual(out["p50_seconds"], 180)
+        self.assertEqual(self.tte("list")[1], {"open": []})
+        self.assertEqual(self.tte("estimate", " ")[1]["error"], "empty_task")
+
+    def test_estimate_uses_history(self):
+        for actual in (100, 200, 300, 400, 500):
+            self.tte("start", "조사", "--kind", "research", now=0)
+            self.tte("stop", now=actual)
+        _, out = self.tte("estimate", "조사", "--kind", "research")
+        self.assertEqual(out["p50_seconds"], 300)
+        self.assertEqual(out["basis"]["method"], "history")
+
     def test_version(self):
-        self.assertEqual(self.tte("--version")[1], {"version": "0.1.0"})
+        self.assertEqual(self.tte("--version")[1], {"version": "0.2.0"})
 
 
 if __name__ == "__main__":

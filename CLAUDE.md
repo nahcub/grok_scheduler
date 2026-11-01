@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 현재 상태
 
-`tte` CLI 0.1.0 구현 완료(계획 1~7단계). 그록봇 설치·검증(8단계)과 보정(9단계)은 아직이다. "계획된 구현 경로" 이하는 전체 기획의 맥락이다.
+`tte` CLI 0.2.0 구현 완료(계획 1~7단계 + 기록 없이 예상만 보는 `estimate`). 공개 저장소: https://github.com/nahcub/grok_scheduler. 그록봇 설치·검증(8단계)과 보정(9단계)은 아직이다. "계획된 구현 경로" 이하는 전체 기획의 맥락이다.
 
-- 구조: `src/tte/cli.py`(명령, JSON 출력), `store.py`(SQLite), `estimate.py`(예측 순수 함수). 그록봇용 문서는 `grokbot/SKILL.md`, `grokbot/INSTALL.md`.
+- 구조: `src/tte/cli.py`(명령, JSON 출력), `store.py`(SQLite), `estimate.py`(예측 순수 함수).
+- 그록봇용: `grokbot/skills/<slug>/SKILL.md`(그록봇이 `main` 브랜치의 raw URL로 내려받는다), `grokbot/INSTALL.md`(tte만 설치), `grokbot/CREATE_BOT.md`(묶음배송 봇 생성 프롬프트). 스킬 경로나 내용을 바꾸면 이 문서들의 URL·버전도 같이 맞춘다.
 - 외부 의존성 없음(표준 라이브러리만). 새 의존성을 추가하지 않는다.
 - 개발 설치: `python -m venv .venv` 후 `.venv/Scripts/python -m pip install -e .` (Linux는 `.venv/bin/`)
 - 테스트: `.venv/Scripts/python -m unittest discover -s tests`
@@ -22,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 사용 규칙("작업 전에 시작 기록, 끝나면 종료 기록")은 그록봇 스킬(`/home/box/agent-data/workflows/<slug>/SKILL.md`, 프런트매터에 `name`과 `description` 필수)로 배포한다. 그록봇이 규칙을 100% 지킨다는 보장이 없으므로, 시작 기록 없는 종료 기록을 거부하는 식의 강제 장치는 CLI 쪽에 둔다.
 - 구현 계획(명령, 출력 형식, 예측 방식, 진행 순서)은 [docs/cli-plan.md](docs/cli-plan.md)에 있다.
 - VM 리셋(마지막 스냅샷으로 복귀)은 고려하지 않는다. 리셋은 저절로 일어나지 않으므로 외부 백업은 설계 대상이 아니다(2026-11-01 결정).
-- 아래 장바구니·급행배송·브리핑·하드웨어 등 나머지 기능은 전체 기획의 맥락으로만 남겨 둔 것이며, 이 디렉토리의 구현 대상이 아니다.
+- 아래 장바구니·급행배송·브리핑 등 나머지 기능은 코드로 만들지 않는다. 그록봇 스킬(`grokbot/skills/bundle-delivery/SKILL.md`)과 봇 생성 프롬프트로만 구현하고, 시간 숫자는 tte에서 받는다. 하드웨어는 이 디렉토리의 대상이 아니다.
 
 ## 프로젝트
 

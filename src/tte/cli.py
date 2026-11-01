@@ -24,10 +24,12 @@ def build_parser():
     parser.add_argument("--version", action="store_true", help="버전 출력")
     sub = parser.add_subparsers(dest="command")
 
-    p = sub.add_parser("start", help="작업 시작 기록 + 예상 시간")
-    p.add_argument("task", help="작업 설명")
-    p.add_argument("--complexity", choices=COMPLEXITIES, default="medium")
-    p.add_argument("--kind", choices=KINDS, default="other")
+    for name, help_text in (("start", "작업 시작 기록 + 예상 시간"),
+                            ("estimate", "기록 없이 예상 시간만")):
+        p = sub.add_parser(name, help=help_text)
+        p.add_argument("task", help="작업 설명")
+        p.add_argument("--complexity", choices=COMPLEXITIES, default="medium")
+        p.add_argument("--kind", choices=KINDS, default="other")
 
     p = sub.add_parser("wait", help="대기 시작(승인, 사람 응답 등)")
     p.add_argument("id", nargs="?")
@@ -67,16 +69,26 @@ def resolve(conn, task_id):
     return rows[0]
 
 
-def cmd_start(conn, args, now):
+def predict(conn, args):
     task = args.task.strip()
     if not task:
         raise TteError("empty_task", "작업 설명이 비어 있음",
-                       'tte start "작업 설명" 형식으로 다시 실행하세요')
+                       f'tte {args.command} "작업 설명" 형식으로 다시 실행하세요')
     est = estimate(
         args.complexity,
         store.durations(conn, args.complexity, args.kind),
         store.durations(conn, args.complexity),
     )
+    return task, est
+
+
+def cmd_estimate(conn, args, now):
+    task, est = predict(conn, args)
+    return {"task": task, "complexity": args.complexity, "kind": args.kind, **est}
+
+
+def cmd_start(conn, args, now):
+    task, est = predict(conn, args)
     with store.write(conn):
         others = [r["id"] for r in store.open_tasks(conn)]
         task_id = store.new_id(conn)
@@ -154,7 +166,7 @@ def cmd_stats(conn, args, now):
 
 
 COMMANDS = {
-    "start": cmd_start, "wait": cmd_wait, "resume": cmd_resume,
+    "estimate": cmd_estimate, "start": cmd_start, "wait": cmd_wait, "resume": cmd_resume,
     "stop": cmd_stop, "list": cmd_list, "stats": cmd_stats,
 }
 

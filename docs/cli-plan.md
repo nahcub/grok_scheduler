@@ -32,6 +32,7 @@
 
 | 명령 | 하는 일 | 출력 예 |
 | --- | --- | --- |
+| `tte estimate "설명" [--complexity heavy] [--kind research]` | 기록 없이 예측만(장바구니에 담을 때) | `start` 출력에서 `id`를 뺀 것 |
 | `tte start "설명" [--complexity heavy] [--kind research]` | 작업 시작 기록 + 예측 | `{"id":"a3f","task":"...","complexity":"heavy","kind":"research","p50_seconds":1200,"p85_seconds":1800,"basis":{"method":"rule","samples":0},"confidence":"low"}` |
 | `tte wait <id> [--reason approval]` | 대기 시작(승인, 사람 응답 등) | `{"id":"a3f","waiting":true,"reason":"approval"}` |
 | `tte resume <id>` | 대기 끝 | `{"id":"a3f","waiting":false,"waited_seconds":95}` |
@@ -58,7 +59,7 @@
 
 ## 7. 그록봇 쪽 설정
 
-- **스킬**: `/home/box/agent-data/workflows/task-timer/SKILL.md`. 프런트매터 `description`에 "작업을 시작하기 전과 끝낸 뒤에 항상 사용"이라고 적고, 본문에 `start` → (승인 대기 시 `wait`/`resume`) → `stop` 절차와 사용자에게 P50·P85를 말하는 방법을 쓴다. 초안은 저장소의 `grokbot/SKILL.md`로 관리한다.
+- **스킬**: `/home/box/agent-data/workflows/task-timer/SKILL.md`. 프런트매터 `description`에 "작업을 시작하기 전과 끝낸 뒤에 항상 사용"이라고 적고, 본문에 `start` → (승인 대기 시 `wait`/`resume`) → `stop` 절차와 사용자에게 P50·P85를 말하는 방법을 쓴다. 초안은 저장소의 `grokbot/skills/task-timer/SKILL.md`로 관리한다.
 - **봇 프로필 description**: "모든 작업은 시작 전에 `tte start`, 끝난 뒤 `tte stop`" 한 줄을 넣는다.
 
 ## 8. 저장소 구조 (예정)
