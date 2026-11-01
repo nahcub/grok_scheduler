@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tte"
+version = "0.1.0"
+description = "그록봇용 작업 시간 예측 CLI"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+tte = "tte.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
